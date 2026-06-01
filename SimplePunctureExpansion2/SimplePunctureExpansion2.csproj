@@ -65,16 +65,10 @@
     </Reference>
   </ItemGroup>
 
-  <!-- ビルド後にYMM4のプラグインフォルダに「依存ファイルごと」コピーする -->
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <!-- 1. プラグインフォルダの作成 -->
     <Exec Command="if not exist &quot;$(YMM4DirPath)user\plugin\$(ProjectName)&quot; mkdir &quot;$(YMM4DirPath)user\plugin\$(ProjectName)&quot;" />
-
-    <!-- 2. 出力されたC#のDLLをすべてコピー -->
     <Exec Command="copy /Y &quot;$(TargetDir)*.dll&quot; &quot;$(YMM4DirPath)user\plugin\$(ProjectName)\&quot; &gt; NUL" />
-
-    <!-- 3. ★ココが超重要★ SkiaSharpのC++ネイティブエンジンを、プラグインフォルダ「直下」に引きずり出してコピーする -->
-    <Exec Command="if exist &quot;$(TargetDir)runtimes\win-x64\native\libSkiaSharp.dll&quot; copy /Y &quot;$(TargetDir)runtimes\win-x64\native\libSkiaSharp.dll&quot; &quot;$(YMM4DirPath)user\plugin\$(ProjectName)\&quot; &gt; NUL" />
+    <Exec Command="if exist &quot;$(TargetDir)runtimes&quot; xcopy &quot;$(TargetDir)runtimes&quot; &quot;$(YMM4DirPath)user\plugin\$(ProjectName)\runtimes&quot; /E /I /Y" />
   </Target>
 
 </Project>

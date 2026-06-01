@@ -1,16 +1,60 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Controls;
 using YukkuriMovieMaker.Exo;
 using YukkuriMovieMaker.Player.Video;
 using YukkuriMovieMaker.Plugin.Effects;
+using System.IO;
 
 namespace SimplePunctureExpansion2
 {
     [VideoEffect("簡易パンク・膨張2", ["加工"], ["Pucker", "Bloat", "Vector"])]
     internal class SimplePunctureExpansion2Effect : VideoEffectBase
     {
+        static SimplePunctureExpansion2Effect()
+        {
+            LoadNativeLibrary();
+        }
+
+        private static void LoadNativeLibrary()
+        {
+            try
+            {
+                var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (string.IsNullOrEmpty(pluginDir)) return;
+
+                // 実行環境のアーキテクチャを取得 (x64 / x86 / ARM64)
+                string arch = RuntimeInformation.ProcessArchitecture switch
+                {
+                    Architecture.X64 => "win-x64",
+                    Architecture.X86 => "win-x86",
+                    Architecture.Arm64 => "win-arm64",
+                    _ => "win-x64"
+                };
+
+                // runtimesフォルダから正しいアーキテクチャのDLLパスを指定
+                string dllPath = Path.Combine(pluginDir, "runtimes", arch, "native", "libSkiaSharp.dll");
+
+                if (File.Exists(dllPath))
+                {
+                    NativeLibrary.Load(dllPath);
+                }
+                else
+                {
+                    // 以前のバージョンのように直下にある場合のフォールバック
+                    string directPath = Path.Combine(pluginDir, "libSkiaSharp.dll");
+                    if (File.Exists(directPath)) NativeLibrary.Load(directPath);
+                }
+            }
+            catch
+            {
+                // ロードに失敗した場合は無視してSkiaSharp標準の機構に任せる
+            }
+        }
+
         public override string Label => "簡易パンク・膨張2";
 
         [Display(GroupName = "効果", Name = "強度", Description = "+(プラス)側：膨張(Bloat)、 -(マイナス)側：パンク(Pucker)")]
