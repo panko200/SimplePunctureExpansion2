@@ -1,13 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using SkiaSharp;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Controls;
 using YukkuriMovieMaker.Exo;
 using YukkuriMovieMaker.Player.Video;
 using YukkuriMovieMaker.Plugin.Effects;
-using System.IO;
 
 namespace SimplePunctureExpansion2
 {
@@ -16,42 +18,52 @@ namespace SimplePunctureExpansion2
     {
         static SimplePunctureExpansion2Effect()
         {
-            LoadNativeLibrary();
+            RegisterSkiaNativeResolver();
         }
 
-        private static void LoadNativeLibrary()
+        private static bool _isResolverRegistered = false;
+
+        private static void RegisterSkiaNativeResolver()
         {
+            if (_isResolverRegistered) return;
+            _isResolverRegistered = true;
+
             try
             {
-                var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                if (string.IsNullOrEmpty(pluginDir)) return;
-
-                // 実行環境のアーキテクチャを取得 (x64 / x86 / ARM64)
-                string arch = RuntimeInformation.ProcessArchitecture switch
+                NativeLibrary.SetDllImportResolver(typeof(SKObject).Assembly, (libraryName, assembly, searchPath) =>
                 {
-                    Architecture.X64 => "win-x64",
-                    Architecture.X86 => "win-x86",
-                    Architecture.Arm64 => "win-arm64",
-                    _ => "win-x64"
-                };
+                    if (libraryName == "libSkiaSharp")
+                    {
+                        var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                        if (!string.IsNullOrEmpty(pluginDir))
+                        {
+                            string arch = RuntimeInformation.ProcessArchitecture switch
+                            {
+                                Architecture.X64 => "win-x64",
+                                Architecture.X86 => "win-x86",
+                                Architecture.Arm64 => "win-arm64",
+                                _ => "win-x64"
+                            };
 
-                // runtimesフォルダから正しいアーキテクチャのDLLパスを指定
-                string dllPath = Path.Combine(pluginDir, "runtimes", arch, "native", "libSkiaSharp.dll");
+                            string dllPath = Path.Combine(pluginDir, "runtimes", arch, "native", "libSkiaSharp.dll");
+                            if (File.Exists(dllPath) && NativeLibrary.TryLoad(dllPath, out IntPtr handle))
+                            {
+                                return handle;
+                            }
 
-                if (File.Exists(dllPath))
-                {
-                    NativeLibrary.Load(dllPath);
-                }
-                else
-                {
-                    // 以前のバージョンのように直下にある場合のフォールバック
-                    string directPath = Path.Combine(pluginDir, "libSkiaSharp.dll");
-                    if (File.Exists(directPath)) NativeLibrary.Load(directPath);
-                }
+                            string directPath = Path.Combine(pluginDir, "libSkiaSharp.dll");
+                            if (File.Exists(directPath) && NativeLibrary.TryLoad(directPath, out IntPtr handleDirect))
+                            {
+                                return handleDirect;
+                            }
+                        }
+                    }
+                    return IntPtr.Zero;
+                });
             }
             catch
             {
-                // ロードに失敗した場合は無視してSkiaSharp標準の機構に任せる
+                // 無視
             }
         }
 
@@ -61,7 +73,6 @@ namespace SimplePunctureExpansion2
         [AnimationSlider("F2", "", -1.0f, 1.0f)]
         public Animation Strength { get; } = new Animation(0.5f, -1.0f, 1.0f);
 
-        // ★追加：カーブの太さ調整
         [Display(GroupName = "効果", Name = "ふっくら感", Description = "花びらやトゲの太さを調整します。33%が標準で、上げると太く丸くなり、下げると鋭く細くなります。")]
         [AnimationSlider("F0", "%", 0, 200)]
         public Animation CurveTension { get; } = new Animation(33, 0, 200);
@@ -99,7 +110,6 @@ namespace SimplePunctureExpansion2
 
         public override IEnumerable<string> CreateExoVideoFilters(int keyFrameIndex, ExoOutputDescription exoOutputDescription) => [];
         public override IVideoEffectProcessor CreateVideoEffect(IGraphicsDevicesAndContext devices) => new SimplePunctureExpansion2EffectProcessor(devices, this);
-        // ★ CurveTension をアニメーション対象に追加
         protected override IEnumerable<IAnimatable> GetAnimatables() => [Strength, CurveTension, TextureDistortion, Simplification, CornerThreshold, AlphaThreshold];
     }
 }
